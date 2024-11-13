@@ -1,0 +1,94 @@
+package programacion3.parcial3.servidor;
+
+import java.io.*;
+import java.net.*;
+import java.util.*;
+
+public class Servidor {
+    private static final int PORT = 12345;
+    private static final String GRADO_FILE = "src/resources/trabajogrados.txt";
+    private static final String AUTORES_FILE = "src/resources/autores.txt";
+
+    private static Map<Integer, String> trabajosGrado = new HashMap<>();
+    private static Map<Integer, List<String>> autoresPorTrabajo = new HashMap<>();
+
+    public static void main(String[] args) {
+        cargarDatos();
+        
+        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+            System.out.println("Servidor iniciado en el puerto " + PORT);
+
+            while (true) {
+                Socket clientSocket = serverSocket.accept();
+                new Thread(new ClienteHandler(clientSocket)).start();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void cargarDatos() {
+        try (BufferedReader br = new BufferedReader(new FileReader(GRADO_FILE))) {
+            String linea;
+            while ((linea = br.readLine()) != null) {
+                String[] partes = linea.split(";");
+                int id = Integer.parseInt(partes[0]);
+                String info = "Fecha: " + partes[1] + ", Título: " + partes[2] + ", Descripción: " + partes[3];
+                trabajosGrado.put(id, info);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        try (BufferedReader br = new BufferedReader(new FileReader(AUTORES_FILE))) {
+            String linea;
+            while ((linea = br.readLine()) != null) {
+                String[] partes = linea.split(";");
+                int idTrabajo = Integer.parseInt(partes[6]);
+                String autorInfo = "Nombre: " + partes[1] + " " + partes[2] + ", Cédula: " + partes[3] +
+                                   ", Programa: " + partes[4] + ", Título Profesional: " + partes[5];
+                
+                autoresPorTrabajo.computeIfAbsent(idTrabajo, k -> new ArrayList<>()).add(autorInfo);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static class ClienteHandler implements Runnable {
+        private Socket clientSocket;
+
+        public ClienteHandler(Socket socket) {
+            this.clientSocket = socket;
+        }
+
+        @Override
+        public void run() {
+            try (
+                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+                PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true)
+            ) {
+                String request;
+                while ((request = in.readLine()) != null) {
+                    if (request.equals("LISTA_TRABAJOS")) {
+                        for (String trabajo : trabajosGrado.values()) {
+                            out.println(trabajo);
+                        }
+                        out.println("END");
+                    } else if (request.startsWith("AUTORES_TRABAJO")) {
+                        int idTrabajo = Integer.parseInt(request.split(" ")[1]);
+                        List<String> autores = autoresPorTrabajo.get(idTrabajo);
+                        if (autores != null) {
+                            for (String autor : autores) {
+                                out.println(autor);
+                            }
+                        }
+                        out.println("END");
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}

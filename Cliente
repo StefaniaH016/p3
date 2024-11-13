@@ -1,7 +1,10 @@
-package programacion3.parcial3.cliente;
-
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.*;
-import java.net.*;
+import java.net.Socket;
+import java.util.List;
 
 public class Cliente {
     private static final String SERVER_HOST = "127.0.0.1";
@@ -9,31 +12,43 @@ public class Cliente {
 
     public static void main(String[] args) {
         try (Socket socket = new Socket(SERVER_HOST, SERVER_PORT);
-             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-             BufferedReader userInput = new BufferedReader(new InputStreamReader(System.in))) {
+             ObjectInputStream in = new ObjectInputStream(socket.getInputStream());
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
 
-            System.out.println("Conectado al servidor");
+            List<TrabajoDeGrado> trabajosDeGrado = (List<TrabajoDeGrado>) in.readObject();
+            crearInterfaz(trabajosDeGrado, out);
 
-            System.out.println("Solicitando lista de trabajos de grado...");
-            out.println("LISTA_TRABAJOS");
-            String response;
-            while (!(response = in.readLine()).equals("END")) {
-                System.out.println(response);
-            }
-
-            System.out.print("Ingrese el ID del trabajo para ver autores: ");
-            int idTrabajo = Integer.parseInt(userInput.readLine());
-            out.println("AUTORES_TRABAJO " + idTrabajo);
-
-            System.out.println("Autores del trabajo de grado:");
-            while (!(response = in.readLine()).equals("END")) {
-                System.out.println(response);
-            }
-
-        } catch (IOException e) {
+        } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         }
     }
-}
 
+    private static void crearInterfaz(List<TrabajoDeGrado> trabajosDeGrado, PrintWriter out) {
+        JFrame frame = new JFrame("Trabajos de Grado - Universidad del Quindío");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(600, 400);
+
+        String[] columnNames = {"Fecha", "Título", "Descripción"};
+        DefaultTableModel model = new DefaultTableModel(columnNames, 0);
+        JTable table = new JTable(model);
+
+        for (int i = 0; i < trabajosDeGrado.size(); i++) {
+            TrabajoDeGrado trabajo = trabajosDeGrado.get(i);
+            model.addRow(new Object[]{trabajo.getFecha(), trabajo.getTitulo(), trabajo.getDescripcion()});
+        }
+
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                int row = table.getSelectedRow();
+                if (row != -1) {
+                    out.println(row);  // Enviar el índice del trabajo seleccionado al servidor
+                }
+            }
+        });
+
+        JScrollPane scrollPane = new JScrollPane(table);
+        frame.add(scrollPane);
+        frame.setVisible(true);
+    }
+}
